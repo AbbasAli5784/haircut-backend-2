@@ -3,9 +3,73 @@ const router = express.Router();
 const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const nodemailer = require("nodemailer");
 const { auth, isAdmin } = require("../routes/auth");
 const { check, validationResult } = require("express-validator");
 const CustomError = require("../../CustomError");
+
+//Password reset request
+
+router.post("/request-password-reset", async (req, res) => {
+  try {
+    const { email } = req.body;
+    //Check if user exists
+    const user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ error: "User does not exist" });
+    }
+
+    //Generate a password reset token
+    const resetToken = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: "1h",
+    });
+    //Create Transporter
+    let transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: process.env.EMAIL,
+        pass: process.env.PASSWORD,
+      },
+    });
+
+    //Send Email
+    let info = await transporter.sendMail({
+      from: '"MEENCUTZ INC" <abbasali5784@gmail.com>',
+      to: email,
+      subject: "Password Reset",
+      text: "Hello you have requested a password reset. Please use the following link to reset your password: ${process.env.CLIENT_URL}/reset-password/${resetToken}",
+      html:`<p>Hello, you have requested a password reset. Please use the following link to reset your password: <a href="${process.env.CLIENT_URL}/reset-password/${resetToken}">Reset Password</a></p>`,
+      
+    });
+
+    res.status(200).json({ message: "Password reset email sent" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "An error occured" });
+  }
+});
+
+//Password Reset
+
+router.post("/reset-password", async (req, res) => {
+  try {
+    const { resetToken, newPassword } = req.body;
+
+    //Verify the token
+    const decoded = jwt.verify(resetToken, process.env.JWT_SECRET);
+
+    //Has the new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    //Update the user's password
+    await User.updateOne({ _id: decoded._id }, { password: hashedPassword });
+
+    res.status(200).json({ message: "Password reset succesful" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "An error occurred" });
+  }
+});
 
 //get all users
 router.get("/all-users", auth, isAdmin, async (req, res) => {

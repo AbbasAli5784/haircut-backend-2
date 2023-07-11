@@ -6,32 +6,28 @@ const Booking = require("../models/Booking");
 const { auth, isAdmin } = require("../routes/auth");
 const CustomError = require("../../CustomError");
 const { startOfDay, endOfDay } = require("date-fns");
+const moment = require("moment-timezone");
 
 //Get booked time slots for a specific date
 router.get("/date/:date", async (req, res, next) => {
   try {
     const dateParam = req.params.date;
-    const date = new Date(dateParam);
 
-    if (isNaN(date)) {
+    const date = moment.tz(dateParam, "America/New_York").startOf("day");
+    const nextDay = date.clone().add(1, "days");
+
+    if (!date.isValid()) {
       return next(new CustomError(400, "Invalid date format!"));
     }
-    console.log("Date parameter:", date);
-    console.log("Start of day", startOfDay(date));
-    console.log("End of day:", endOfDay(date));
+
     const bookings = await Booking.find({
       date: {
-        $gte: startOfDay(date),
-        $lte: endOfDay(date),
+        $gte: date.toDate(),
+        $lt: nextDay.toDate(),
       },
     });
-    console.log("Bookings", bookings);
-    const bookedTimeSlots = bookings.map((booking) => {
-      console.log("Booking Time:", booking.time);
-      return booking.time;
-    });
 
-    console.log("Booked time slots:", bookedTimeSlots);
+    const bookedTimeSlots = bookings.map((booking) => booking.time);
 
     res.status(200).json(bookedTimeSlots);
   } catch (err) {
@@ -45,38 +41,36 @@ router.post(
   [
     check("user", "User is required").notEmpty(),
     check("date", "Date is required").isISO8601(),
-    (req, res, next) => {
-      console.log(`Time before validation: ${req.body.time}`);
-      next();
-    },
     check("time", "Time is required").matches(
       /^((0[0-9]|1[0-2]):[0-5][0-9](AM|PM))$/i
     ),
     check("service", "Service is not selected").notEmpty(),
   ],
   async (req, res, next) => {
-    console.log("Request body", req.body);
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      console.log("Errors array:", errors.array());
       return res.status(400).json({ errors: errors.array() });
     }
 
     const { date, time, ...rest } = req.body;
 
+    const bookingDateTime = moment.tz(
+      `${date} ${time}`,
+      "YYYY-MM-DD hh:mma",
+      "America/New_York"
+    );
+
     const newBooking = new Booking({
       ...rest,
-      date: new Date(date),
+      date: bookingDateTime.toDate(),
       time: time,
     });
-
-    console.log("New booking object:", newBooking);
 
     try {
       const savedBooking = await newBooking.save();
       res.status(201).json(savedBooking);
     } catch (err) {
-      console.log("Error while saving booking", err);
+      console.error(err);
       next(err);
     }
   }
