@@ -24,28 +24,30 @@ router.post("/request-password-reset", async (req, res) => {
       expiresIn: "1h",
     });
     //Create Transporter
-    let transporter = nodemailer.createTransport({
-      service: "gmail",
+    const transporter = nodemailer.createTransport({
+      host: "smtp.ethereal.email",
+      port: 587,
       auth: {
-        user: process.env.EMAIL,
-        pass: process.env.PASSWORD,
+        user: "itzel41@ethereal.email",
+        pass: "tuc5fkxZayG2mMYssM",
       },
     });
 
     //Send Email
     let info = await transporter.sendMail({
       from: '"MEENCUTZ INC" <abbasali5784@gmail.com>',
-      to: email,
+      to: email, 
       subject: "Password Reset",
       text: "Hello you have requested a password reset. Please use the following link to reset your password: ${process.env.CLIENT_URL}/reset-password/${resetToken}",
-      html:`<p>Hello, you have requested a password reset. Please use the following link to reset your password: <a href="${process.env.CLIENT_URL}/reset-password/${resetToken}">Reset Password</a></p>`,
-      
+      html: `<p>Hello, you have requested a password reset. Please use the following link to reset your password: <a href="${process.env.CLIENT_URL}/reset-password/${resetToken}">Reset Password</a></p>`,
     });
 
     res.status(200).json({ message: "Password reset email sent" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "An error occured" });
+    res
+      .status(500)
+      .json({ error: "An error occurred", details: error.message });
   }
 });
 
@@ -67,7 +69,9 @@ router.post("/reset-password", async (req, res) => {
     res.status(200).json({ message: "Password reset succesful" });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ error: "An error occurred" });
+    res
+      .status(500)
+      .json({ error: "An error occurred", details: error.message });
   }
 });
 
