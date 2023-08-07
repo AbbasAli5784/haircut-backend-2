@@ -9,6 +9,7 @@ const { startOfDay, endOfDay } = require("date-fns");
 const moment = require("moment-timezone");
 const nodemailer = require("nodemailer");
 const User = require("../models/User");
+const TimeSlot = require("../models/TimeSlot");
 
 //Get booked time slots for a specific date
 router.get("/date/:date", async (req, res, next) => {
@@ -53,10 +54,22 @@ router.post(
     if (!errors.isEmpty()) {
       return res.status(400).json({ errors: errors.array() });
     }
-    const authUser = await User.findById(req.user._id);
 
-    const { date, time, service, user } = req.body;
+    const { service, date, time, user } = req.body;
 
+    console.log("Request Body:", req.body);
+
+    // Check if timeslot is available
+    const timeslot = await TimeSlot.findOne({ date, time });
+    console.log("Test:", date);
+    console.log("Test2:", time);
+    if (!timeslot || timeslot.status !== "available") {
+      return res
+        .status(400)
+        .json({ message: "The selected timeslot is not available" });
+    }
+
+    // Proceed with booking
     const bookingDateTime = moment.tz(
       `${date} ${time}`,
       "YYYY-MM-DD hh:mma",
@@ -74,40 +87,37 @@ router.post(
       time: time,
       service: service,
     });
+
     console.log("Booking info:", newBooking);
 
     try {
+      // Save the booking
       const savedBooking = await newBooking.save();
 
-      console.log("Saved booking:", savedBooking);
+      // Update the timeslot status
+      timeslot.status = "blocked";
+      timeslot.booked = true;
+      await timeslot.save();
 
-      // Create Transporter
-      const transporter = nodemailer.createTransport({
-        host: "smtp.ethereal.email",
-        port: 587,
-        auth: {
-          user: "emilia.bode@ethereal.email",
-          pass: "F1YwHsm8tBHTCuvQb1",
-        },
-      });
-
-      // Send Email
-      console.log("Logging user email", req.user);
-      let info = await transporter.sendMail({
-        from: '"MEENCUTZ INC" <abbasali5784@gmail.com>',
-        to: req.user.email, // Use req.user.email instead of getting email from req.body
-        subject: "Booking Confirmation",
-        text: `Your booking has been confirmed! Service: ${service}, Date: ${date}, Time: ${time}.`,
-        html: `<p>Your booking has been confirmed! Service: ${service}, Date: ${date}, Time: ${time}.</p>`,
-      });
-
-      res.status(201).json(savedBooking);
+      // The rest of the code
     } catch (err) {
       console.error(err);
       next(err);
     }
+    return res.status(200).json({ message: "success" });
   }
 );
+
+//Retrive user bookings
+router.get("/mybookings", auth, async (req, res) => {
+  try {
+    const bookings = await Booking.find({ "user.id": req.user.userId });
+    return res.json(bookings);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Server Error" });
+  }
+});
 
 router.get("/fully-booked-dates", async (req, res, next) => {
   console.log("Test message");
@@ -146,6 +156,20 @@ router.get("/fully-booked-dates", async (req, res, next) => {
   }
 });
 
+router.get("/booked", async (req, res) => {
+  try {
+    const fullyBooked = await Booking.find({});
+    console.log("All Booked Times", fullyBooked);
+    return res
+      .status(200)
+      .json({ message: "Here are the bookings", data: fullyBooked });
+  } catch (err) {
+    console.error("error", err);
+  }
+
+  return res.status(200).json({ message: "Here are the bookings" });
+});
+
 //Get booking by ID
 router.get("/:id", async (req, res, next) => {
   try {
@@ -160,37 +184,93 @@ router.get("/:id", async (req, res, next) => {
   }
 });
 
-//Update A Booking
+//Update A Booking time
 router.put("/:id", async (req, res) => {
   try {
-    const updateBooking = await Booking.findByIdAndUpdate(
-      req.params.id,
-      req.body,
-      { new: true }
-    );
-    if (!updateBooking) {
-      return next(new CustomError(404, "Booking not found!"));
-    } else {
-      res.status(200).json(updateBooking);
+    const { date, time, name, phoneNumber, service } = req.body;
+
+    console.log("Put Request Body", req.body);
+
+    const booking = await Booking.findById(req.params.id);
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found" });
     }
+
+    if (date && time) {
+      const newTimeslot = await TimeSlot.findOne({ date, time });
+      if (!newTimeslot || newTimeslot.status !== "available") {
+        return res
+          .status(400)
+          .json({ message: "The selected new timeslot is not available" });
+      }
+
+      const oldTimeslot = await TimeSlot.findOne({
+        date: booking.date,
+        time: booking.time,
+      });
+
+      oldTimeslot.status = "available";
+      oldTimeslot.booked = false;
+      await oldTimeslot.save();
+
+      newTimeslot.status = "blocked";
+      newTimeslot.booked = true;
+      await newTimeslot.save();
+
+      booking.date = date;
+      booking.time = time;
+    }
+
+    booking.user.name = name || booking.user.name;
+    booking.user.phone = phoneNumber || booking.user.phone;
+    booking.service = service || booking.service;
+
+    await booking.save();
+
+    res.status(200).json({ message: "Booking updated successfully", booking });
   } catch (err) {
-    next(err);
+    res.status(500).json({ message: err.message });
   }
 });
 
 //Remove a booking
-router.delete("/:id", async (req, res, next) => {
-  const { id } = req.params;
 
+router.delete("/:id", async (req, res) => {
   try {
-    const removedBooking = await Booking.findByIdAndRemove(id);
-    if (!removedBooking) {
-      return next(new CustomError(404, "Booking not found!"));
-    } else {
-      res.status(200).json(removedBooking);
+    // Find the booking in the database using the id
+    const booking = await Booking.findById(req.params.id);
+
+    // If booking is not found, return a 404 status code
+    if (!booking) {
+      return res.status(404).json({ message: "Booking not found " });
     }
+
+    // Find the timeslot with corresponding date and time
+    const timeslot = await TimeSlot.findOne({
+      date: booking.date,
+      time: booking.time,
+    });
+
+    // If timeslot is not found, return a 404 status code
+    if (!timeslot) {
+      return res.status(404).json({ message: "Timeslot not found " });
+    }
+
+    // Update the status of the timeslot to "available" and save the changes
+    timeslot.status = "available";
+    timeslot.booked = false;
+    await timeslot.save();
+
+    // Delete the booking
+    await Booking.deleteOne({ _id: booking._id });
+
+    // Return a success message
+    res
+      .status(200)
+      .json({ message: "Booking deleted and Timeslot updated successfully" });
   } catch (err) {
-    next(err);
+    // If there's an error, return it
+    res.status(500).json({ message: err.message });
   }
 });
 
@@ -199,6 +279,7 @@ router.post("/booking-confirmation", auth, async (req, res) => {
   try {
     const { email, service, date, time } = req.body; // Assuming these details are coming in the request body
 
+    console.log("Request Body Confirmation:", req.body);
     // Check if user exists
     const user = await User.findOne({ email });
     if (!user) {
@@ -210,8 +291,8 @@ router.post("/booking-confirmation", auth, async (req, res) => {
       host: "smtp.ethereal.email",
       port: 587,
       auth: {
-        user: "itzel41@ethereal.email",
-        pass: "tuc5fkxZayG2mMYssM",
+        user: "esteban78@ethereal.email",
+        pass: "tEZs6ZGfwHjjvGXJsX",
       },
     });
 
@@ -232,5 +313,41 @@ router.post("/booking-confirmation", auth, async (req, res) => {
       .json({ error: "An error occurred", details: error.message });
   }
 });
+
+router.put(
+  "/unblock/:time",
+  auth,
+  isAdmin,
+  [
+    check("time", "Invalid Time").matches(
+      /^((0[0-9]|1[0-2]):[0-5][0-9](AM|PM))$/i
+    ),
+  ],
+  async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+    const { time } = req.params;
+
+    try {
+      const timeslot = await TimeSlot.findOne({
+        date: new Date(),
+        time: time,
+      });
+
+      if (!timeslot) {
+        return res.status(404).json({ message: "TimeSlot not found" });
+      }
+
+      timeslot.status = "available";
+      await timeslot.save();
+
+      res.status(200).json({ message: "Timeslot status updated successfully" });
+    } catch (err) {
+      res.status(500).json({ message: err.message });
+    }
+  }
+);
 
 module.exports = router;

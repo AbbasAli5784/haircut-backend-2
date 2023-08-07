@@ -1,20 +1,26 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
 const TimeslotSchema = new mongoose.Schema({
   date: {
     type: Date,
     required: true,
   },
+  time: {
+    type: String,
+    required: true,
+  },
   status: {
     type: String,
     enum: ["available", "blocked"],
-    default: "available",
+    default: "blocked",
   },
-  adminId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
-    required: false,
-  },
+  booked: {
+    type: Boolean,
+    default: false
+  }
 });
 
-module.exports = mongoose.model("TimeSlot", TimeslotSchema);
+// Create the model only once and export it
+const TimeSlot =
+  mongoose.models.TimeSlot || mongoose.model("TimeSlot", TimeslotSchema);
+module.exports = TimeSlot;

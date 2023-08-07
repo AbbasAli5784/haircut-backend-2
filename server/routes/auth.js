@@ -4,8 +4,8 @@ const User = require("../models/User");
 
 const auth = async (req, res, next) => {
   const bearerToken = req.header("authorization");
-  console.log("Bearer Token: ", bearerToken);
-  console.log("All headers: ", req.headers);
+  // console.log("Bearer Token: ", bearerToken);
+  // console.log("All headers: ", req.headers);
 
   if (!bearerToken) {
     //Implemented the custom error class here as i believe it keeps the code more organized and smooth
