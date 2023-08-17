@@ -7,7 +7,12 @@ const { auth, isAdmin } = require("../routes/auth");
 const CustomError = require("../../CustomError");
 const { startOfDay, endOfDay } = require("date-fns");
 const moment = require("moment-timezone");
+const dotenv = require("dotenv");
+dotenv.config();
 const nodemailer = require("nodemailer");
+const sgTransport = require("nodemailer-sendgrid-transport");
+const sgMail = require("@sendgrid/mail");
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 const User = require("../models/User");
 const TimeSlot = require("../models/TimeSlot");
 
@@ -47,7 +52,7 @@ router.post(
     check("time", "Time is required").matches(
       /^((0[0-9]|1[0-2]):[0-5][0-9](AM|PM))$/i
     ),
-    check("service", "Service is not selected").notEmpty(),
+    check("service", "Service is required").notEmpty(),
   ],
   async (req, res, next) => {
     const errors = validationResult(req);
@@ -287,23 +292,21 @@ router.post("/booking-confirmation", auth, async (req, res) => {
     }
 
     // Create Transporter
-    const transporter = nodemailer.createTransport({
-      host: "smtp.ethereal.email",
-      port: 587,
-      auth: {
-        user: "esteban78@ethereal.email",
-        pass: "tEZs6ZGfwHjjvGXJsX",
+    const msg = {
+      to: [email, "abbasali5784@gmail.com"],
+      from: "bookings@meencutz.com",
+      templateId: "d-b6415612ac014a0089f418fac6d8986f",
+      dynamicTemplateData: {
+        name: user.name,
+        service: service,
+        date: date,
+        time: time,
       },
-    });
+    };
 
-    // Send Email
-    let info = await transporter.sendMail({
-      from: '"MEENCUTZ INC" <abbasali5784@gmail.com>',
-      to: email,
-      subject: "Booking Confirmation",
-      text: `Your booking has been confirmed! Service: ${service}, Date: ${date}, Time: ${time}.`,
-      html: `<p>Your booking has been confirmed! Service: ${service}, Date: ${date}, Time: ${time}.</p>`,
-    });
+    await sgMail.send(msg);
+
+    console.log("Success");
 
     res.status(200).json({ message: "Booking confirmation email sent" });
   } catch (error) {

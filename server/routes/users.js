@@ -36,7 +36,7 @@ router.post("/request-password-reset", async (req, res) => {
     //Send Email
     let info = await transporter.sendMail({
       from: '"MEENCUTZ INC" <abbasali5784@gmail.com>',
-      to: email, 
+      to: email,
       subject: "Password Reset",
       text: "Hello you have requested a password reset. Please use the following link to reset your password: ${process.env.CLIENT_URL}/reset-password/${resetToken}",
       html: `<p>Hello, you have requested a password reset. Please use the following link to reset your password: <a href="${process.env.CLIENT_URL}/reset-password/${resetToken}">Reset Password</a></p>`,
@@ -171,18 +171,18 @@ router.post("/login", async (req, res, next) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return next(new CustomError(400, "User not found"));
+      res.status(400).json({ message: "User not found" });
     }
 
     //Compare passwords
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return next(new CustomError(400, "Incorrect password!"));
+      res.status(400).json({ message: "Incorrect Password" });
     }
 
     //Generate JWT
     const token = jwt.sign(
-      { userId: user._id, role: user.role },
+      { userId: user._id, role: user.role, userEmail: user.email },
       process.env.JWT_SECRET,
       {
         expiresIn: "1h",

@@ -10,6 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@sendgrid/mail": "^7.7.0",
     "bcrypt": "^5.1.0",
     "cors": "^2.8.5",
     "date-fns": "^2.29.3",
@@ -22,7 +23,8 @@
     "moment-timezone": "^0.5.43",
     "mongodb": "^5.1.0",
     "mongoose": "^7.0.2",
-    "nodemailer": "^6.9.3"
+    "nodemailer": "^6.9.3",
+    "nodemailer-sendgrid-transport": "^0.2.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.21"
