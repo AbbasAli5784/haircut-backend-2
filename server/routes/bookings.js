@@ -287,6 +287,7 @@ router.post("/booking-confirmation", auth, async (req, res) => {
     console.log("Request Body Confirmation:", req.body);
     // Check if user exists
     const user = await User.findOne({ email });
+    console.log("made it past line 289");
     if (!user) {
       return res.status(400).json({ error: "User does not exist" });
     }
