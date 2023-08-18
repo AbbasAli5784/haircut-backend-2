@@ -5,9 +5,8 @@ const dotenv = require("dotenv");
 const bookingRoutes = require("./routes/bookings");
 const userRoutes = require("./routes/users");
 const servicesRoute = require("./routes/services");
-const timeslotRoutes = require("./routes/timeslotRoutes");
+const timeslotRoutes = require("./routes/timeSlotRoutes");
 const moment = require("moment");
-const momentTz = require("moment-timezone");
 
 const TimeSlot = require("./models/TimeSlot");
 // You need to adjust the path to your TimeSlot model
@@ -49,12 +48,14 @@ async function createTimeSlots() {
 
       // Create a new date object for the current day and hour in the America/New_York timezone
       const dateTimeNY = moment(date).add(hour, "hours").tz(timezone);
-      
+
       // Convert the date to UTC without changing the hour
       const dateTimeUTC = moment.utc(dateTimeNY.format("YYYY-MM-DDTHH:mm:ss"));
 
       // Check if a time slot with the specified date and time already exists.
-      const existingTimeSlot = await TimeSlot.findOne({ date: dateTimeUTC.toDate() });
+      const existingTimeSlot = await TimeSlot.findOne({
+        date: dateTimeUTC.toDate(),
+      });
       if (!existingTimeSlot) {
         // If it doesn't exist, create the time slot.
         const newTimeSlot = new TimeSlot({ date: dateTimeUTC.toDate(), time });
