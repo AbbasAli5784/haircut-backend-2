@@ -31,7 +31,7 @@ router.post("/request-password-reset", async (req, res) => {
     });
 
     //Create Transporter
-    const resetLink = `http://${req.headers.host}/reset-password?token=${resetToken}`;
+    const resetLink = `https://meencutz.com/reset-password?token=${resetToken}`;
     console.log("Reset Link:", resetLink);
     const msg = {
       to: [email, "abbasali5784@gmail.com"],
