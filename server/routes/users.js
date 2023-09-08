@@ -4,6 +4,9 @@ const User = require("../models/User");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
+const sgMail = require("@sendgrid/mail");
+const sgTransport = require("nodemailer-sendgrid-transport");
+sgMail.setApiKey(process.env.SENDGRID_API_KEY);
 const { auth, isAdmin } = require("../routes/auth");
 const { check, validationResult } = require("express-validator");
 const CustomError = require("../../CustomError");
@@ -13,36 +16,39 @@ const CustomError = require("../../CustomError");
 router.post("/request-password-reset", async (req, res) => {
   try {
     const { email } = req.body;
+    console.log("Test 1");
     //Check if user exists
     const user = await User.findOne({ email });
+    console.log("Test 2");
     if (!user) {
       return res.status(400).json({ error: "User does not exist" });
     }
+    console.log("Test 3");
 
     //Generate a password reset token
     const resetToken = jwt.sign({ _id: user._id }, process.env.JWT_SECRET, {
       expiresIn: "1h",
     });
+
     //Create Transporter
-    const transporter = nodemailer.createTransport({
-      host: "smtp.ethereal.email",
-      port: 587,
-      auth: {
-        user: "itzel41@ethereal.email",
-        pass: "tuc5fkxZayG2mMYssM",
+    const resetLink = `http://${req.headers.host}/reset-password?token=${resetToken}`;
+    console.log("Reset Link:", resetLink);
+    const msg = {
+      to: [email, "abbasali5784@gmail.com"],
+      from: "bookings@meencutz.com",
+      templateId: "d-56d8ee0c81fb4279aeb4f818837c4f36",
+      dynamicTemplateData: {
+        resetLink: resetLink,
       },
-    });
+    };
 
     //Send Email
-    let info = await transporter.sendMail({
-      from: '"MEENCUTZ INC" <abbasali5784@gmail.com>',
-      to: email,
-      subject: "Password Reset",
-      text: "Hello you have requested a password reset. Please use the following link to reset your password: ${process.env.CLIENT_URL}/reset-password/${resetToken}",
-      html: `<p>Hello, you have requested a password reset. Please use the following link to reset your password: <a href="${process.env.CLIENT_URL}/reset-password/${resetToken}">Reset Password</a></p>`,
-    });
+    await sgMail.send(msg);
+
+    console.log("Success");
 
     res.status(200).json({ message: "Password reset email sent" });
+    console.log("Reset Token: ", resetToken);
   } catch (error) {
     console.error(error);
     res
@@ -171,13 +177,13 @@ router.post("/login", async (req, res, next) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      res.status(400).json({ message: "User not found" });
+      return res.status(400).json({ message: "User not found" });
     }
 
     //Compare passwords
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      res.status(400).json({ message: "Incorrect Password" });
+      return res.status(400).json({ message: "Incorrect Password" });
     }
 
     //Generate JWT
